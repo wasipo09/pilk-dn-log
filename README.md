@@ -30,15 +30,25 @@ If no active trade is found, the tool will guide you through the setup:
 The tool will automatically generate a contract name (e.g., `BTC-29MAR-72000-C`) and calculate your **Starting Hedge**.
 
 ### 2. Main Menu
-Once initialized, you have three options:
+The menu adapts based on whether you have an active trade.
 
+**No Active Trade:**
+1.  **New Trade**: Initialize a new position.
+2.  **Exit App**: Close the application.
+
+**Active Trade:**
+Displays the **Contract Name** and **Current Delta** (last recorded).
 1.  **Update / Check Delta**:
     - Input the *current* option delta.
     - The tool calculates the **Target Hedge** vs. **Current Hedge**.
     - If the difference exceeds your **Band**, it recommends a `BUY` or `SELL` action to re-hedge.
-2.  **Close/Delete Trade**: Clears the saved data to start fresh.
-3.  **Exit App**: Closes the tool (data remains saved).
+2.  **Close/Delete Trade**:
+    - Archives the trade session to `trade_history.json`.
+    - Clears the active trade data.
+    - **Exits the application**.
+3.  **Exit App**: Closes the tool (active trade remains saved).
 
 ## Configuration
 
-- **Data File**: `sniper_trade.json` (created in the same directory)
+- **Data File**: `sniper_trade.json` (active trade)
+- **History File**: `trade_history.json` (archived trades)

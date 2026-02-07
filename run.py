@@ -90,11 +90,31 @@ def new_trade():
         "size": size,
         "band": band,
         "current_hedge_pos": required_hedge, # Negative = Short, Positive = Long
-        "trades_count": 0
+        "trades_count": 0,
+        "last_delta": entry_delta  # Initialize with entry delta
     }
     save_data(data)
     print("💾 Data Saved. You can close the terminal now.")
     return data
+
+def archive_trade(data):
+    history_file = "trade_history.json"
+    history = []
+    
+    if os.path.exists(history_file):
+        try:
+            with open(history_file, 'r') as f:
+                history = json.load(f)
+        except:
+            history = []
+            
+    data['end_time'] = str(datetime.now())
+    history.append(data)
+    
+    with open(history_file, 'w') as f:
+        json.dump(history, f, indent=4)
+        
+    print(f"📚 Trade archived to {history_file}")
 
 def check_status(data):
     print("\n" + "="*40)
@@ -160,35 +180,56 @@ def check_status(data):
         if confirm.lower() == 'y':
             data['current_hedge_pos'] += diff
             data['trades_count'] += 1
+            data['last_delta'] = current_delta # Update last delta
             save_data(data)
             print("✅ Database Updated. Back to Neutral.")
             
     else:
         print("\n✅ STATUS: SAFE")
         print("   (Inside the Band. Do nothing.)")
+        # Update last delta anyway for display purposes if verified
+        data['last_delta'] = current_delta
+        save_data(data)
 
 def main():
     while True:
         data = load_data()
         
         if not data:
-            new_trade()
-            continue
+            print("\n" + "."*30)
+            print("🚫 NO ACTIVE TRADE")
+            print("1. New Trade")
+            print("2. Exit App")
             
-        print("\n" + "."*30)
-        print(f"ACTIVE: {data['name']} ({data['type'].upper()})")
-        print("1. Update / Check Delta")
-        print("2. Close/Delete Trade")
-        print("3. Exit App")
-        
-        choice = input("Select: ")
-        
-        if choice == '1':
-            check_status(data)
-        elif choice == '2':
-            clear_data()
-        elif choice == '3':
-            sys.exit()
+            choice = input("Select: ")
+            
+            if choice == '1':
+                new_trade()
+            elif choice == '2':
+                sys.exit()
+            else:
+                print("Invalid selection.")
+        else:
+            print("\n" + "."*30)
+            print(f"ACTIVE: {data['name']} ({data['type'].upper()})")
+            # Handle legacy data that might not have last_delta
+            last_delta = data.get('last_delta', 'N/A')
+            print(f"Current Delta: {last_delta}")
+            
+            print("1. Update / Check Delta")
+            print("2. Close/Delete Trade")
+            print("3. Exit App")
+            
+            choice = input("Select: ")
+            
+            if choice == '1':
+                check_status(data)
+            elif choice == '2':
+                archive_trade(data)
+                clear_data()
+                sys.exit() # Exit after closing
+            elif choice == '3':
+                sys.exit()
 
 if __name__ == "__main__":
     main()
