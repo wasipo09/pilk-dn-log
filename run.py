@@ -187,9 +187,6 @@ def check_status(data):
     else:
         print("\n✅ STATUS: SAFE")
         print("   (Inside the Band. Do nothing.)")
-        # Update last delta anyway for display purposes if verified
-        data['last_delta'] = current_delta
-        save_data(data)
 
 def main():
     while True:
