@@ -1,54 +1,83 @@
-# Sniper Trade Logger
+# Pilk DN Log
 
-A Python-based CLI tool for tracking and managing delta-neutral option strategies (Gamma Rent / Scalping).
+Delta-Neutral Trade Logger with TUI and Binance integration.
 
 ## Features
 
-- **Trade Initialization**: Easily set up new option trades with contract details, strike price, size, and entry delta.
-- **Delta Management**: specialized logic for calculating initial hedge requirements for both Calls and Puts.
-- **Dynamic Monitoring**: Compare your current hedge position against the target hedge based on live delta inputs.
-- **Band Trading**: "Trigger limits" (Bands) prevent over-trading by only suggesting adjustments when the delta deviation exceeds a specified threshold.
-- **Persistence**: automatically saves active trade data to `sniper_trade.json` so you can resume sessions later.
+- **TUI Dashboard**: Beautiful terminal interface with Textual
+- **Multi-position support**: Track multiple delta-neutral positions simultaneously
+- **Live delta fetching**: Auto-fetch delta from Binance via ccxt
+- **Band trading**: Only suggest rehedges when delta deviation exceeds threshold
+- **Position history**: Archive closed trades for review
+
+## Installation
+
+```bash
+cd ~/Projects/pilk-dn-log
+pip install -e .
+```
+
+Or with pipx for isolated install:
+
+```bash
+pipx install .
+```
 
 ## Usage
 
-Run the script using Python:
-
 ```bash
-python run.py
+dn-log
 ```
 
-### 1. Initialize New Trade
-If no active trade is found, the tool will guide you through the setup:
-- **Expiry**: e.g., `29MAR`
-- **Type**: `Call` or `Put`
-- **Strike Price**: The option's strike price
-- **Band**: The logic buffer; adjustments are only suggested if deviation > band
-- **Entry Delta**: The delta at the time of entry (0.0 to 1.0)
-- **Size**: Position size in contracts
+### Keyboard Shortcuts
 
-The tool will automatically generate a contract name (e.g., `BTC-29MAR-72000-C`) and calculate your **Starting Hedge**.
+- `n` - New position
+- `r` - Refresh
+- `q` - Quit
+- `Enter` - Select/view position details
 
-### 2. Main Menu
-The menu adapts based on whether you have an active trade.
+### Adding a Position
 
-**No Active Trade:**
-1.  **New Trade**: Initialize a new position.
-2.  **Exit App**: Close the application.
+1. Press `n` or click "➕ New Position"
+2. Enter:
+   - **Expiry**: e.g., `27FEB`
+   - **Type**: CALL or PUT
+   - **Strike**: e.g., `70000`
+   - **Size**: Position size in BTC
+   - **Entry Delta**: Delta at entry (0.0-1.0)
+   - **Band**: Rehedge threshold (e.g., 0.0038)
 
-**Active Trade:**
-Displays the **Contract Name** and **Current Delta** (last recorded).
-1.  **Update / Check Delta**:
-    - Input the *current* option delta.
-    - The tool calculates the **Target Hedge** vs. **Current Hedge**.
-    - If the difference exceeds your **Band**, it recommends a `BUY` or `SELL` action to re-hedge.
-2.  **Close/Delete Trade**:
-    - Archives the trade session to `trade_history.json`.
-    - Clears the active trade data.
-    - **Exits the application**.
-3.  **Exit App**: Closes the tool (active trade remains saved).
+### Monitoring
+
+- Dashboard shows all positions with current status
+- Click a row to see details and fetch live delta
+- Status indicators:
+  - ✅ OK - Within band
+  - ⚠️ REHEDGE - Needs adjustment
+
+## Data Storage
+
+- Positions: `~/.pilk/dn_positions.json`
+- History: `~/.pilk/dn_history.json`
 
 ## Configuration
 
-- **Data File**: `sniper_trade.json` (active trade)
-- **History File**: `trade_history.json` (archived trades)
+For live Binance delta fetching, set environment variables:
+
+```bash
+export BINANCE_API_KEY="your_key"
+export BINANCE_SECRET="your_secret"
+```
+
+Without credentials, the app uses a mock delta estimator.
+
+## Legacy
+
+The original single-position CLI is preserved as `run.py` (legacy).
+
+## Requirements
+
+- Python 3.10+
+- textual >= 0.47.0
+- ccxt >= 4.0.0
+- rich >= 13.0.0

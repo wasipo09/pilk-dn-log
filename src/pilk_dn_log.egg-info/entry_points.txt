@@ -1,0 +1,2 @@
+[console_scripts]
+dn-log = pilk_dn_log.tui:main
