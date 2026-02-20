@@ -71,13 +71,30 @@ export BINANCE_SECRET="your_secret"
 
 Without credentials, the app uses a mock delta estimator.
 
-## Legacy
+## Legacy CLI (`run.py`)
 
-The original single-position CLI is preserved as `run.py` (legacy).
+Updated multi-position CLI with delta updating:
+
+```bash
+python run.py
+```
+
+### Commands
+
+- **List Positions** — View all active trades with delta and hedge status
+- **New Position** — Add a new delta-neutral trade position
+- **Update Delta** — Enter current delta for a position, auto-calculate rehedge
+- **Close Position** — Archive a trade to history
+- **Trade History** — View all closed trades
+
+### Data Storage
+
+- Active positions: `sniper_trade.json`
+- Trade history: `trade_history.json`
 
 ## Requirements
 
 - Python 3.10+
-- textual >= 0.47.0
-- ccxt >= 4.0.0
+- textual >= 0.47.0 (for TUI)
+- ccxt >= 4.0.0 (for Binance integration)
 - rich >= 13.0.0

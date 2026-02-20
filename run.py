@@ -5,38 +5,81 @@ from datetime import datetime
 
 # --- CONFIGURATION ---
 DATA_FILE = "sniper_trade.json"
+HISTORY_FILE = "trade_history.json"
 
-def load_data():
+def load_positions():
+    """Load all positions from data file."""
     if not os.path.exists(DATA_FILE):
-        return None
+        return []
     try:
         with open(DATA_FILE, 'r') as f:
             return json.load(f)
     except:
-        return None
+        return []
 
-def save_data(data):
+def save_positions(positions):
+    """Save all positions to data file."""
     with open(DATA_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
+        json.dump(positions, f, indent=4)
 
-def clear_data():
-    if os.path.exists(DATA_FILE):
-        os.remove(DATA_FILE)
-    print("\n🗑️  Trade data cleared. Ready for a new mission.")
+def get_position_by_id(pos_id):
+    """Find a position by its ID."""
+    positions = load_positions()
+    for pos in positions:
+        if pos['id'] == pos_id:
+            return pos
+    return None
+
+def remove_position(pos_id):
+    """Remove a position by ID."""
+    positions = load_positions()
+    positions = [p for p in positions if p['id'] != pos_id]
+    save_positions(positions)
+
+def generate_id():
+    """Generate a unique ID for a new position."""
+    positions = load_positions()
+    if not positions:
+        return 1
+    return max(p['id'] for p in positions) + 1
 
 def get_float(prompt):
+    """Get a float input from user with validation."""
     while True:
         try:
             return float(input(prompt))
         except ValueError:
             print("❌ Invalid number. Try again.")
 
+def list_positions():
+    """List all active positions."""
+    positions = load_positions()
+    
+    if not positions:
+        print("\n🚫 NO ACTIVE POSITIONS")
+        return None
+    
+    print("\n" + "="*50)
+    print("📋 ACTIVE POSITIONS")
+    print("="*50)
+    
+    for pos in positions:
+        last_delta = pos.get('last_delta', 'N/A')
+        print(f"  [{pos['id']}] {pos['name']}")
+        print(f"      Type: {pos['type'].upper()} | Size: {pos['size']} | Band: {pos['band']}")
+        print(f"      Last Delta: {last_delta} | Hedges: {pos['trades_count']}")
+        print(f"      Hedge Position: {pos['current_hedge_pos']:.5f} BTC")
+        print("-" * 50)
+    
+    return positions
+
 def new_trade():
+    """Create a new trade position."""
     print("\n" + "="*40)
-    print("🆕  INITIALIZE NEW SNIPER TRADE")
+    print("🆕  INITIALIZE NEW TRADE")
     print("="*40)
     
-    # 1. THE INPUTS YOU REQUESTED
+    # 1. INPUTS
     expiry = input("📅 Expiry (e.g. 29MAR): ").strip().upper()
     
     while True:
@@ -57,17 +100,14 @@ def new_trade():
     else:
         contract_name += "-P"
 
-    # 2. LOGIC: CALCULATE STARTING HEDGE
-    # Call (+Delta) -> Needs Short Hedge (-Delta) to be 0
-    # Put  (-Delta) -> Needs Long Hedge (+Delta) to be 0
-    
+    # 2. CALCULATE STARTING HEDGE
     raw_delta_exposure = size * entry_delta
     
     if option_type == 'call':
-        required_hedge = -raw_delta_exposure # Short
+        required_hedge = -raw_delta_exposure
         hedge_desc = "SHORT"
     else:
-        required_hedge = raw_delta_exposure  # Long
+        required_hedge = raw_delta_exposure
         hedge_desc = "LONG"
 
     print("\n" + "-"*40)
@@ -82,69 +122,50 @@ def new_trade():
         return None
 
     # 3. SAVE TO FILE
-    data = {
+    pos_id = generate_id()
+    position = {
+        "id": pos_id,
         "start_time": str(datetime.now()),
         "name": contract_name,
         "type": option_type,
         "strike": strike,
         "size": size,
         "band": band,
-        "current_hedge_pos": required_hedge, # Negative = Short, Positive = Long
+        "current_hedge_pos": required_hedge,
         "trades_count": 0,
-        "last_delta": entry_delta  # Initialize with entry delta
+        "last_delta": entry_delta
     }
-    save_data(data)
-    print("💾 Data Saved. You can close the terminal now.")
-    return data
-
-def archive_trade(data):
-    history_file = "trade_history.json"
-    history = []
     
-    if os.path.exists(history_file):
-        try:
-            with open(history_file, 'r') as f:
-                history = json.load(f)
-        except:
-            history = []
-            
-    data['end_time'] = str(datetime.now())
-    history.append(data)
+    positions = load_positions()
+    positions.append(position)
+    save_positions(positions)
     
-    with open(history_file, 'w') as f:
-        json.dump(history, f, indent=4)
-        
-    print(f"📚 Trade archived to {history_file}")
+    print(f"\n💾 Position saved with ID: {pos_id}")
+    return position
 
-def check_status(data):
+def update_delta(pos_id):
+    """Update delta for a specific position."""
+    position = get_position_by_id(pos_id)
+    if not position:
+        print("❌ Position not found.")
+        return
+    
     print("\n" + "="*40)
-    print(f"🔎 CHECK STATUS: {data['name']}")
-    print(f"   Size: {data['size']} | Band: {data['band']} | Type: {data['type'].upper()}")
+    print(f"🔎 UPDATE DELTA: {position['name']} [ID: {pos_id}]")
+    print(f"   Size: {position['size']} | Band: {position['band']} | Type: {position['type'].upper()}")
     print("="*40)
     
-    # 1. GET LIVE DATA
     current_delta = get_float("\nInput Current Option Delta (0.0 - 1.0): ")
     
-    # 2. CALCULATE MATH
-    # What represents "Neutral" right now?
-    # If Call: Delta is positive. Neutral Hedge is Negative (Short).
-    # If Put: Delta is negative (usually shown as -0.5). Neutral Hedge is Positive (Long).
-    
-    # Normalize Delta Sign based on type
-    if data['type'] == 'call':
-        # If user types 0.50, it is +0.50
+    # CALCULATE MATH
+    if position['type'] == 'call':
         contract_delta_val = abs(current_delta)
-        target_hedge = -(data['size'] * contract_delta_val) # We want to be Short
+        target_hedge = -(position['size'] * contract_delta_val)
     else:
-        # If user types 0.40 (for put), it implies -0.40 exposure.
-        # We need +0.40 Hedge to fix it.
-        contract_delta_val = abs(current_delta) 
-        target_hedge = (data['size'] * contract_delta_val) # We want to be Long
+        contract_delta_val = abs(current_delta)
+        target_hedge = (position['size'] * contract_delta_val)
 
-    current_hedge = data['current_hedge_pos']
-    
-    # DIFF = Where we are vs Where we should be
-    # Example: Target -0.60 (Short more), Current -0.50. Diff = -0.10.
+    current_hedge = position['current_hedge_pos']
     diff = target_hedge - current_hedge
     
     print("\n-----------------------------------")
@@ -153,22 +174,16 @@ def check_status(data):
     print(f"📉 Deviation (Diff):    {diff:.5f} BTC")
     print("-----------------------------------")
 
-    # 3. DECISION LOGIC
+    # DECISION LOGIC
     abs_diff = abs(diff)
     
-    if abs_diff > data['band']:
-        print(f"\n🚨 ALERT: DIFF {abs_diff:.5f} > BAND {data['band']}")
+    if abs_diff > position['band']:
+        print(f"\n🚨 ALERT: DIFF {abs_diff:.5f} > BAND {position['band']}")
         
         if diff > 0:
-            # Diff is Positive. We need to ADD to our position number.
-            # If Short (-0.5) needs to go to (-0.4), Diff is +0.1.
-            # Adding +0.1 to a Short means BUYING back.
             action = "BUY / LONG"
             reason = "Covering Short or Adding Long"
         else:
-            # Diff is Negative. We need to SUBTRACT.
-            # If Short (-0.5) needs to go to (-0.6), Diff is -0.1.
-            # Subtracting means SELLING more.
             action = "SELL / SHORT"
             reason = "Increasing Short or Selling Long"
 
@@ -178,55 +193,142 @@ def check_status(data):
         
         confirm = input("\nDid you do it? (y/n): ")
         if confirm.lower() == 'y':
-            data['current_hedge_pos'] += diff
-            data['trades_count'] += 1
-            data['last_delta'] = current_delta # Update last delta
-            save_data(data)
-            print("✅ Database Updated. Back to Neutral.")
+            # Update position
+            position['current_hedge_pos'] += diff
+            position['trades_count'] += 1
+            position['last_delta'] = current_delta
             
+            # Update in positions list
+            positions = load_positions()
+            for i, pos in enumerate(positions):
+                if pos['id'] == pos_id:
+                    positions[i] = position
+                    break
+            save_positions(positions)
+            
+            print("✅ Position updated. Back to Neutral.")
     else:
         print("\n✅ STATUS: SAFE")
         print("   (Inside the Band. Do nothing.)")
+        # Still update last_delta even if no rehedge
+        position['last_delta'] = current_delta
+        positions = load_positions()
+        for i, pos in enumerate(positions):
+            if pos['id'] == pos_id:
+                positions[i] = position
+                break
+        save_positions(positions)
+
+def close_position(pos_id):
+    """Close and archive a position."""
+    position = get_position_by_id(pos_id)
+    if not position:
+        print("❌ Position not found.")
+        return
+    
+    print(f"\n📦 Closing position: {position['name']}")
+    confirm = input("Are you sure? (y/n): ")
+    if confirm.lower() != 'y':
+        print("❌ Cancelled.")
+        return
+    
+    # Archive to history
+    history = []
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r') as f:
+                history = json.load(f)
+        except:
+            history = []
+    
+    position['end_time'] = str(datetime.now())
+    history.append(position)
+    
+    with open(HISTORY_FILE, 'w') as f:
+        json.dump(history, f, indent=4)
+    
+    # Remove from active positions
+    remove_position(pos_id)
+    
+    print(f"✅ Position archived to {HISTORY_FILE}")
+
+def show_history():
+    """Show trade history."""
+    if not os.path.exists(HISTORY_FILE):
+        print("\n🚫 No trade history found.")
+        return
+    
+    with open(HISTORY_FILE, 'r') as f:
+        history = json.load(f)
+    
+    if not history:
+        print("\n🚫 Trade history is empty.")
+        return
+    
+    print("\n" + "="*50)
+    print("📚 TRADE HISTORY")
+    print("="*50)
+    
+    for trade in history:
+        print(f"\n  [{trade['id']}] {trade['name']}")
+        print(f"      Start: {trade['start_time']}")
+        print(f"      End: {trade.get('end_time', 'N/A')}")
+        print(f"      Type: {trade['type'].upper()} | Size: {trade['size']}")
+        print(f"      Final Hedge: {trade['current_hedge_pos']:.5f} BTC")
+        print(f"      Total Hedges: {trade['trades_count']}")
+        print("-" * 50)
+
+def main_menu():
+    """Display main menu options."""
+    print("\n" + "="*30)
+    print("🎯 DN-LOG CLI")
+    print("="*30)
+    print("1. List Positions")
+    print("2. New Position")
+    print("3. Update Delta")
+    print("4. Close Position")
+    print("5. Trade History")
+    print("6. Exit")
+    print("-"*30)
 
 def main():
     while True:
-        data = load_data()
+        main_menu()
+        choice = input("Select: ").strip()
         
-        if not data:
-            print("\n" + "."*30)
-            print("🚫 NO ACTIVE TRADE")
-            print("1. New Trade")
-            print("2. Exit App")
-            
-            choice = input("Select: ")
-            
-            if choice == '1':
-                new_trade()
-            elif choice == '2':
-                sys.exit()
-            else:
-                print("Invalid selection.")
+        if choice == '1':
+            list_positions()
+        
+        elif choice == '2':
+            new_trade()
+        
+        elif choice == '3':
+            positions = list_positions()
+            if positions:
+                try:
+                    pos_id = int(input("\nEnter position ID to update: "))
+                    update_delta(pos_id)
+                except ValueError:
+                    print("❌ Invalid ID.")
+        
+        elif choice == '4':
+            positions = list_positions()
+            if positions:
+                try:
+                    pos_id = int(input("\nEnter position ID to close: "))
+                    close_position(pos_id)
+                except ValueError:
+                    print("❌ Invalid ID.")
+        
+        elif choice == '5':
+            show_history()
+        
+        elif choice == '6':
+            print("\n👋 Goodbye!")
+            sys.exit()
+        
         else:
-            print("\n" + "."*30)
-            print(f"ACTIVE: {data['name']} ({data['type'].upper()})")
-            # Handle legacy data that might not have last_delta
-            last_delta = data.get('last_delta', 'N/A')
-            print(f"Current Delta: {last_delta}")
-            
-            print("1. Update / Check Delta")
-            print("2. Close/Delete Trade")
-            print("3. Exit App")
-            
-            choice = input("Select: ")
-            
-            if choice == '1':
-                check_status(data)
-            elif choice == '2':
-                archive_trade(data)
-                clear_data()
-                sys.exit() # Exit after closing
-            elif choice == '3':
-                sys.exit()
+            print("❌ Invalid selection.")
 
 if __name__ == "__main__":
     main()
